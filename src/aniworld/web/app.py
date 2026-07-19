@@ -479,17 +479,26 @@ def _run_dubsync_queue_item(item):
     raw_offset = job.get("offset")
     offset = float(raw_offset) if raw_offset not in (None, "") else None
 
+    raw_selected = job.get("episodes")
+    selected = None
+    if isinstance(raw_selected, list) and raw_selected:
+        selected = [
+            (int(s) if s is not None else None, int(e)) for s, e in raw_selected
+        ]
+
     update_queue_progress(item["id"], 0, item.get("series_url") or "")
     report, outcomes = run_dubsync(
         item["series_url"],
         job["target_dir"],
         offset=offset,
         audio_language=item.get("language") or defaults["audio_language"],
+        recursive=bool(job.get("recursive", False)),
         cleanup=bool(job.get("cleanup", defaults["cleanup"])),
         auto_align=bool(job.get("auto_align", defaults["auto_align"])),
         allow_resample=bool(
             job.get("allow_resample", defaults["allow_resample"])
         ),
+        selected=selected,
     )
 
     failed = [o for o in outcomes if o.status == "failed"]
@@ -1848,6 +1857,23 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
             except ValueError:
                 return jsonify({"error": f"Invalid offset: {raw_offset}"}), 400
 
+        # Optional episode restriction from the DubSync page's checklist:
+        # a list of [season, episode] pairs.
+        raw_episodes = data.get("episodes")
+        selected = None
+        if raw_episodes is not None:
+            if not isinstance(raw_episodes, list) or not raw_episodes:
+                return jsonify({"error": "episodes must be a non-empty list"}), 400
+            try:
+                selected = [
+                    [int(s) if s is not None else None, int(e)]
+                    for s, e in raw_episodes
+                ]
+            except (TypeError, ValueError):
+                return jsonify(
+                    {"error": "episodes must be [season, episode] pairs"}
+                ), 400
+
         job = {
             "target_dir": os.path.expanduser(target_dir),
             "offset": raw_offset or None,
@@ -1856,6 +1882,8 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
                 data.get("allow_resample", defaults["allow_resample"])
             ),
             "cleanup": bool(data.get("cleanup", defaults["cleanup"])),
+            "recursive": bool(data.get("recursive", False)),
+            "episodes": selected,
         }
 
         username = None
@@ -1884,6 +1912,89 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
         )
         _ensure_queue_worker()
         return jsonify({"queue_id": queue_id})
+
+    @app.route("/api/dubsync/browse")
+    def api_dubsync_browse():
+        """List subdirectories of a path for the DubSync folder picker."""
+        from pathlib import Path
+
+        from ..models.aniworld_to.dubsync.matcher import VIDEO_EXTENSIONS
+
+        raw = request.args.get("path", "").strip()
+        path = Path(os.path.expanduser(raw)) if raw else Path.home()
+        try:
+            path = path.resolve()
+        except OSError as exc:
+            return jsonify({"error": str(exc)}), 400
+        if not path.is_dir():
+            return jsonify({"error": f"Not a directory: {path}"}), 400
+
+        dirs = []
+        video_count = 0
+        try:
+            entries = sorted(path.iterdir(), key=lambda p: p.name.lower())
+        except PermissionError:
+            return jsonify({"error": f"Permission denied: {path}"}), 403
+        except OSError as exc:
+            return jsonify({"error": str(exc)}), 400
+        for entry in entries:
+            if entry.name.startswith("."):
+                continue
+            try:
+                if entry.is_dir():
+                    dirs.append({"name": entry.name, "path": str(entry)})
+                elif (
+                    entry.is_file()
+                    and entry.suffix.lower() in VIDEO_EXTENSIONS
+                ):
+                    video_count += 1
+            except OSError:
+                continue
+
+        parent = str(path.parent) if path.parent != path else None
+        return jsonify(
+            {
+                "path": str(path),
+                "parent": parent,
+                "dirs": dirs,
+                "video_count": video_count,
+                "home": str(Path.home()),
+            }
+        )
+
+    @app.route("/api/dubsync/scan")
+    def api_dubsync_scan():
+        """Parse a local folder's video filenames into season/episode keys."""
+        from ..models.aniworld_to.dubsync.matcher import scan_directory
+
+        raw = request.args.get("path", "").strip()
+        if not raw:
+            return jsonify({"error": "path is required"}), 400
+        path = os.path.expanduser(raw)
+        recursive = request.args.get("recursive") == "1"
+        try:
+            parsed, unmatched = scan_directory(path, recursive=recursive)
+        except NotADirectoryError:
+            return jsonify({"error": f"Not a directory: {raw}"}), 400
+        except PermissionError:
+            return jsonify({"error": f"Permission denied: {raw}"}), 403
+        except OSError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+        return jsonify(
+            {
+                "path": path,
+                "files": [
+                    {
+                        "name": pf.path.name,
+                        "season": pf.season,
+                        "episode": pf.episode,
+                    }
+                    for pf in parsed
+                ],
+                "unparsed": [p.name for p in unmatched],
+            }
+        )
 
     @app.route("/api/popular-movies")
     def api_popular_movies():
@@ -2539,6 +2650,12 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
     def autosync_page():
         return render_template("autosync.html")
 
+    # ===== DubSync Page =====
+
+    @app.route("/dubsync")
+    def dubsync_page():
+        return render_template("dubsync.html")
+
     # ===== Auto-Sync API =====
 
     def _get_current_user_info():
@@ -2930,6 +3047,12 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
         # Endpoints that require admin instead of just login
         _admin_only = {
             "settings_page",
+            # DubSync browses the server's filesystem and writes into local
+            # folders, so the whole feature is admin-only under auth.
+            "dubsync_page",
+            "api_dubsync",
+            "api_dubsync_browse",
+            "api_dubsync_scan",
             "api_settings",
             "api_settings_public_ip",
             "api_settings_update",

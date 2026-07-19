@@ -15,6 +15,7 @@
       "nav.home": "Home",
       "nav.library": "Library",
       "nav.autosync": "Auto-Sync",
+      "nav.dubsync": "DubSync",
       "nav.planned": "Planned",
       "nav.queue": "Queue",
       "nav.settings": "Settings",
@@ -87,10 +88,10 @@
       "settings.interface": "Interface",
       "settings.dubsync": "DubSync",
       "settings.dubsync_hint":
-        "Graft a German dub from AniWorld/SerienStream losslessly onto your own archive-quality video files as a secondary audio track.",
+        "Defaults for the DubSync page (see the DubSync tab in the navigation). Each queued job can override them.",
       "settings.dubsync_defaults": "Defaults",
       "settings.dubsync_target_hint":
-        "Default directory of local video files (used when the enqueue form below leaves the folder empty).",
+        "Default local video folder, used to prefill the DubSync page.",
       "settings.dubsync_offset": "Manual offset (seconds)",
       "settings.dubsync_auto_align": "Automatic audio alignment",
       "settings.dubsync_auto_align_hint":
@@ -102,13 +103,67 @@
       "settings.dubsync_cleanup": "Edit files in place",
       "settings.dubsync_cleanup_hint":
         "When off, results are written as *.dubsync.mkv copies next to the originals (safe default).",
-      "settings.dubsync_enqueue": "Queue a DubSync job",
-      "settings.dubsync_enqueue_hint":
-        "The job runs through the normal download queue using the defaults above.",
-      "settings.dubsync_add": "Add to queue",
       "settings.dubsync_saved": "DubSync defaults saved",
-      "settings.dubsync_need_url": "Enter a series or season URL",
-      "settings.dubsync_queued": "DubSync job added to queue",
+      "dubsync.page_hint":
+        "Graft a German dub from AniWorld/SerienStream losslessly onto your own archive-quality video files as an additional audio track.",
+      "dubsync.step1": "1. Local folder",
+      "dubsync.step1_hint":
+        "Pick the folder that holds your local video files. Filenames are scanned for season/episode numbers.",
+      "dubsync.browse": "Browse…",
+      "dubsync.recursive": "Include subfolders",
+      "dubsync.scanning": "Scanning folder…",
+      "dubsync.scan_failed": "Scan failed: ",
+      "dubsync.scan_one": "video file recognised",
+      "dubsync.scan_many": "video files recognised",
+      "dubsync.scan_unparsed": "without a readable episode number",
+      "dubsync.step2": "2. Show",
+      "dubsync.step2_hint":
+        "Search AniWorld/SerienStream for the show the dub should come from.",
+      "dubsync.search": "Search",
+      "dubsync.searching": "Searching…",
+      "dubsync.search_failed": "Search failed: ",
+      "dubsync.no_results": "No results",
+      "dubsync.loading_seasons": "Loading episode list…",
+      "dubsync.load_failed": "Failed to load episodes: ",
+      "dubsync.change_show": "Change",
+      "dubsync.season_one": "season",
+      "dubsync.season_many": "seasons",
+      "dubsync.step3": "3. Episodes",
+      "dubsync.step3_hint":
+        "Episodes matching your local files are pre-selected. Adjust the selection before queueing.",
+      "dubsync.season_label": "Season",
+      "dubsync.no_dub": "No German Dub available",
+      "dubsync.local_file": "Local file: ",
+      "dubsync.unpaired": "local file(s) have no matching episode: ",
+      "dubsync.unparsed_note": "Not recognised: ",
+      "dubsync.step4": "4. Options",
+      "dubsync.step4_hint":
+        "Prefilled from the DubSync defaults in Settings; changes here apply to this job only.",
+      "dubsync.offset": "Manual offset (seconds)",
+      "dubsync.offset_hint":
+        "Fixed dub delay in seconds (negative allowed). Leave empty to let automatic alignment decide per episode.",
+      "dubsync.offset_tip":
+        "Example: -0.5 starts the dub half a second earlier. When set, automatic alignment is skipped for every episode.",
+      "dubsync.auto_align": "Automatic audio alignment",
+      "dubsync.auto_align_tip":
+        "Low-confidence detections fall back to 0 s and are flagged in the queue so you can verify them by ear.",
+      "dubsync.allow_resample": "Correct drift (re-encodes the dub track)",
+      "dubsync.allow_resample_tip":
+        "Only used when linear drift is actually detected (e.g. PAL-sourced dubs running ~4% fast). The dub is re-encoded to FLAC; video and original audio stay bit-exact.",
+      "dubsync.cleanup": "Edit files in place",
+      "dubsync.cleanup_tip":
+        "In-place editing writes to a temp file first and atomically replaces the original only after the mux succeeded.",
+      "dubsync.add": "Add to queue",
+      "dubsync.summary_incomplete": "Pick a folder and a show first",
+      "dubsync.summary_one": "episode selected",
+      "dubsync.summary_many": "episodes selected",
+      "dubsync.queued": "DubSync job added to queue",
+      "dubsync.queue_failed": "Failed to enqueue: ",
+      "dubsync.browser_title": "Choose a folder",
+      "dubsync.browser_up": "← Back",
+      "dubsync.browser_select": "Use this folder",
+      "dubsync.browser_empty": "No subfolders",
+      "dubsync.browser_videos": "video file(s) in this folder",
       "settings.discord": "Discord Request Bot",
       "settings.discord.enable": "Enable Discord bot",
       "settings.discord.enable_hint":
@@ -153,6 +208,7 @@
       "nav.home": "Start",
       "nav.library": "Bibliothek",
       "nav.autosync": "Auto-Sync",
+      "nav.dubsync": "DubSync",
       "nav.planned": "Geplant",
       "nav.queue": "Warteschlange",
       "nav.settings": "Einstellungen",
@@ -225,10 +281,10 @@
       "settings.interface": "Oberfläche",
       "settings.dubsync": "DubSync",
       "settings.dubsync_hint":
-        "Fügt einen deutschen Dub von AniWorld/SerienStream verlustfrei als zweite Tonspur in deine eigenen hochwertigen Videodateien ein.",
+        "Standardwerte für die DubSync-Seite (siehe DubSync-Tab in der Navigation). Jeder Auftrag kann sie überschreiben.",
       "settings.dubsync_defaults": "Standardwerte",
       "settings.dubsync_target_hint":
-        "Standardordner der lokalen Videodateien (wird genutzt, wenn das Formular unten keinen Ordner angibt).",
+        "Standardordner der lokalen Videodateien; füllt die DubSync-Seite vor.",
       "settings.dubsync_offset": "Manueller Versatz (Sekunden)",
       "settings.dubsync_auto_align": "Automatische Tonspur-Ausrichtung",
       "settings.dubsync_auto_align_hint":
@@ -240,13 +296,67 @@
       "settings.dubsync_cleanup": "Dateien direkt bearbeiten",
       "settings.dubsync_cleanup_hint":
         "Wenn aus, werden Ergebnisse als *.dubsync.mkv-Kopien neben den Originalen gespeichert (sichere Voreinstellung).",
-      "settings.dubsync_enqueue": "DubSync-Auftrag einreihen",
-      "settings.dubsync_enqueue_hint":
-        "Der Auftrag läuft mit den obigen Standardwerten durch die normale Download-Warteschlange.",
-      "settings.dubsync_add": "Zur Warteschlange",
       "settings.dubsync_saved": "DubSync-Standardwerte gespeichert",
-      "settings.dubsync_need_url": "Serien- oder Staffel-URL eingeben",
-      "settings.dubsync_queued": "DubSync-Auftrag zur Warteschlange hinzugefügt",
+      "dubsync.page_hint":
+        "Fügt einen deutschen Dub von AniWorld/SerienStream verlustfrei als zusätzliche Tonspur in deine eigenen hochwertigen Videodateien ein.",
+      "dubsync.step1": "1. Lokaler Ordner",
+      "dubsync.step1_hint":
+        "Wähle den Ordner mit deinen lokalen Videodateien. Die Dateinamen werden nach Staffel-/Episodennummern durchsucht.",
+      "dubsync.browse": "Durchsuchen…",
+      "dubsync.recursive": "Unterordner einbeziehen",
+      "dubsync.scanning": "Ordner wird gescannt…",
+      "dubsync.scan_failed": "Scan fehlgeschlagen: ",
+      "dubsync.scan_one": "Videodatei erkannt",
+      "dubsync.scan_many": "Videodateien erkannt",
+      "dubsync.scan_unparsed": "ohne lesbare Episodennummer",
+      "dubsync.step2": "2. Serie",
+      "dubsync.step2_hint":
+        "Suche auf AniWorld/SerienStream nach der Serie, aus der der Dub kommen soll.",
+      "dubsync.search": "Suchen",
+      "dubsync.searching": "Suche läuft…",
+      "dubsync.search_failed": "Suche fehlgeschlagen: ",
+      "dubsync.no_results": "Keine Ergebnisse",
+      "dubsync.loading_seasons": "Episodenliste wird geladen…",
+      "dubsync.load_failed": "Episoden konnten nicht geladen werden: ",
+      "dubsync.change_show": "Ändern",
+      "dubsync.season_one": "Staffel",
+      "dubsync.season_many": "Staffeln",
+      "dubsync.step3": "3. Episoden",
+      "dubsync.step3_hint":
+        "Episoden mit passenden lokalen Dateien sind vorausgewählt. Passe die Auswahl vor dem Einreihen an.",
+      "dubsync.season_label": "Staffel",
+      "dubsync.no_dub": "Kein deutscher Dub verfügbar",
+      "dubsync.local_file": "Lokale Datei: ",
+      "dubsync.unpaired": "lokale Datei(en) ohne passende Episode: ",
+      "dubsync.unparsed_note": "Nicht erkannt: ",
+      "dubsync.step4": "4. Optionen",
+      "dubsync.step4_hint":
+        "Vorbelegt mit den DubSync-Standardwerten aus den Einstellungen; Änderungen gelten nur für diesen Auftrag.",
+      "dubsync.offset": "Manueller Versatz (Sekunden)",
+      "dubsync.offset_hint":
+        "Feste Dub-Verzögerung in Sekunden (negativ erlaubt). Leer lassen, damit die automatische Ausrichtung pro Episode entscheidet.",
+      "dubsync.offset_tip":
+        "Beispiel: -0.5 lässt den Dub eine halbe Sekunde früher starten. Wenn gesetzt, wird die automatische Ausrichtung für alle Episoden übersprungen.",
+      "dubsync.auto_align": "Automatische Tonspur-Ausrichtung",
+      "dubsync.auto_align_tip":
+        "Erkennungen mit niedriger Konfidenz fallen auf 0 s zurück und werden in der Warteschlange markiert, damit du sie per Ohr prüfen kannst.",
+      "dubsync.allow_resample": "Drift korrigieren (kodiert die Dub-Spur neu)",
+      "dubsync.allow_resample_tip":
+        "Wird nur genutzt, wenn tatsächlich linearer Drift erkannt wird (z. B. PAL-Dubs, ~4 % zu schnell). Der Dub wird als FLAC neu kodiert; Video und Originalton bleiben bitgenau.",
+      "dubsync.cleanup": "Dateien direkt bearbeiten",
+      "dubsync.cleanup_tip":
+        "Beim direkten Bearbeiten wird zuerst in eine Temp-Datei geschrieben und das Original erst nach erfolgreichem Mux atomar ersetzt.",
+      "dubsync.add": "Zur Warteschlange",
+      "dubsync.summary_incomplete": "Wähle zuerst einen Ordner und eine Serie",
+      "dubsync.summary_one": "Episode ausgewählt",
+      "dubsync.summary_many": "Episoden ausgewählt",
+      "dubsync.queued": "DubSync-Auftrag zur Warteschlange hinzugefügt",
+      "dubsync.queue_failed": "Einreihen fehlgeschlagen: ",
+      "dubsync.browser_title": "Ordner auswählen",
+      "dubsync.browser_up": "← Zurück",
+      "dubsync.browser_select": "Diesen Ordner verwenden",
+      "dubsync.browser_empty": "Keine Unterordner",
+      "dubsync.browser_videos": "Videodatei(en) in diesem Ordner",
       "settings.discord": "Discord-Anfrage-Bot",
       "settings.discord.enable": "Discord-Bot aktivieren",
       "settings.discord.enable_hint":

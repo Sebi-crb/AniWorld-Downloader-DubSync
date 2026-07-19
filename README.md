@@ -110,9 +110,11 @@ aniworld https://aniworld.to/anime/stream/<series>/staffel-1 \
 - Files that already carry the dub language are skipped automatically; matching
   handles common scene/Blu-ray naming (`Show - 01`, `S01E01`, `01v2`, …) and
   reports unmatched files instead of guessing.
-- Also available in the Web UI: set defaults and enqueue DubSync jobs from the
-  Settings page; see the `ANIWORLD_DUBSYNC_*` keys in `.env.example` for
-  persistent configuration.
+- Also available in the Web UI: the **DubSync** tab lets you browse to your
+  local folder, search the show, and queue the job with the matching episodes
+  auto-selected from your filenames. Defaults live on the Settings page; see
+  the `ANIWORLD_DUBSYNC_*` keys in `.env.example` for persistent
+  configuration.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

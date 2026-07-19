@@ -81,38 +81,6 @@ function saveDubsyncDefaults() {
   putSettings(payload, t("settings.dubsync_saved", "DubSync defaults saved"));
 }
 
-async function enqueueDubsync() {
-  const url = document.getElementById("dubsyncUrl").value.trim();
-  const targetDir = document.getElementById("dubsyncJobTargetDir").value.trim();
-  if (!url) {
-    showToast(t("settings.dubsync_need_url", "Enter a series or season URL"));
-    return;
-  }
-  try {
-    const resp = await fetch("/api/dubsync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url,
-        target_dir: targetDir,
-        offset: document.getElementById("dubsyncOffset").value.trim(),
-        auto_align: document.getElementById("dubsyncAutoAlign").checked,
-        allow_resample: document.getElementById("dubsyncAllowResample").checked,
-        cleanup: document.getElementById("dubsyncCleanup").checked,
-      }),
-    });
-    const data = await resp.json();
-    if (data.error) {
-      showToast(data.error);
-      return;
-    }
-    document.getElementById("dubsyncUrl").value = "";
-    showToast(t("settings.dubsync_queued", "DubSync job added to queue"));
-  } catch (e) {
-    showToast("Failed to enqueue DubSync job: " + e.message);
-  }
-}
-
 async function putSettings(payload, successMsg) {
   try {
     const resp = await fetch("/api/settings", {

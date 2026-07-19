@@ -226,8 +226,8 @@ endblock %} {% block content %}
   <div class="settings-section">
     <h2 data-i18n="settings.dubsync">DubSync</h2>
     <div class="settings-hint" data-i18n="settings.dubsync_hint">
-      Graft a German dub from AniWorld/SerienStream losslessly onto your own
-      archive-quality video files as a secondary audio track.
+      Defaults for the DubSync page (see the DubSync tab in the navigation).
+      Each queued job can override them.
     </div>
 
     <h3 class="settings-subtitle" data-i18n="settings.dubsync_defaults">Defaults</h3>
@@ -236,8 +236,7 @@ endblock %} {% block content %}
       <button onclick="saveDubsyncDefaults()">Save</button>
     </div>
     <div class="settings-hint" data-i18n="settings.dubsync_target_hint">
-      Default directory of local video files (used when the enqueue form below
-      leaves the folder empty).
+      Default local video folder, used to prefill the DubSync page.
     </div>
     <div class="settings-row" style="gap: 10px; flex-wrap: wrap; margin-top: 10px">
       <div style="flex: 1; min-width: 160px">
@@ -292,18 +291,6 @@ endblock %} {% block content %}
     <div class="settings-hint" data-i18n="settings.dubsync_cleanup_hint">
       When off, results are written as *.dubsync.mkv copies next to the
       originals (safe default).
-    </div>
-
-    <h3 class="settings-subtitle" style="margin-top: 18px" data-i18n="settings.dubsync_enqueue">Queue a DubSync job</h3>
-    <div class="settings-row">
-      <input type="text" id="dubsyncUrl" placeholder="https://aniworld.to/anime/stream/…/staffel-1" />
-    </div>
-    <div class="settings-row" style="margin-top: 8px">
-      <input type="text" id="dubsyncJobTargetDir" placeholder="Local folder (empty = default above)" />
-      <button onclick="enqueueDubsync()" data-i18n="settings.dubsync_add">Add to queue</button>
-    </div>
-    <div class="settings-hint" data-i18n="settings.dubsync_enqueue_hint">
-      The job runs through the normal download queue using the defaults above.
     </div>
   </div>
 

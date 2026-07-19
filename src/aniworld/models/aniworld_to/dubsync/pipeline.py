@@ -14,7 +14,7 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 from ....config import LANG_CODE_MAP, LANG_KEY_MAP, LANG_LABELS, logger
 from ...common.common import check_downloaded
@@ -221,6 +221,7 @@ def run_dubsync(
     auto_align: bool = True,
     allow_resample: bool = False,
     min_confidence: float = DEFAULT_MIN_CONFIDENCE,
+    selected: Optional[Iterable[Tuple[Optional[int], int]]] = None,
 ) -> Tuple[MatchReport, List[FileOutcome]]:
     """Run DubSync over ``target_dir`` against ``source``.
 
@@ -243,11 +244,15 @@ def run_dubsync(
             correct it with ``atempo`` -- this re-encodes the dub track only.
         min_confidence: correlation peak z-score below which a detection is
             discarded in favour of offset 0 (and flagged in the report).
+        selected: restrict the run to these ``(season, episode)`` keys
+            (``None`` processes every episode the matcher pairs).
 
     Returns ``(match_report, outcomes)``.
     """
 
-    report = match_directory(target_dir, source, recursive=recursive)
+    report = match_directory(
+        target_dir, source, recursive=recursive, selected=selected
+    )
     audio_code = _resolve_audio_code(audio_language)
 
     _print_report(report, target_dir)

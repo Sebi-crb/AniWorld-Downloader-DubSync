@@ -23,7 +23,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, List, Optional, Tuple
+from typing import Iterable, Iterator, List, Optional, Tuple
 
 # Extensions we treat as remuxable video containers.
 VIDEO_EXTENSIONS = {
@@ -290,6 +290,7 @@ def match_directory(
     target_dir: os.PathLike | str,
     source,
     recursive: bool = False,
+    selected: Optional[Iterable[Tuple[Optional[int], int]]] = None,
 ) -> MatchReport:
     """Pair the video files in ``target_dir`` with *source*'s episodes.
 
@@ -298,10 +299,20 @@ def match_directory(
     season if present, else the source's single season number when the source
     has exactly one, else ``1``. Unmatched local files fall back to absolute
     numbering when the source has globally-unique episode numbers.
+
+    ``selected`` optionally restricts pairing to the given
+    ``(season, episode)`` keys (e.g. the user's checklist in the web UI);
+    everything else in the source is treated as if it did not exist.
     """
 
     parsed, unmatched = scan_directory(target_dir, recursive=recursive)
     by_key, by_abs, season_numbers = build_source_index(source)
+
+    if selected is not None:
+        sel = {(s, int(e)) for s, e in selected}
+        by_key = {k: v for k, v in by_key.items() if k in sel}
+        by_abs = {n: v for n, v in by_abs.items() if (v[0], n) in sel}
+        season_numbers = {k[0] for k in by_key}
 
     single_season = next(iter(season_numbers)) if len(season_numbers) == 1 else None
 
