@@ -73,7 +73,46 @@ For full user guides, tutorials, and troubleshooting, visit the [official docume
 - **Planned Releases** – Queue titles that aren't out yet; they download automatically once available
 - **Discord Request Bot** – Let others request movies/series from Discord, with owner approval
 - **Interface Language** – Switch the whole UI between English and German
+- **DubSync** – Graft a German dub onto your own archive-quality video files (see below)
 - **Docker Ready** – Deploy easily using **Docker** or **Docker Compose**
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## DubSync
+
+You have high-quality Blu-ray rips that only carry Japanese/English audio, and
+AniWorld has the German dub? DubSync extracts the dub audio from the stream and
+losslessly muxes it into each matching local file as a secondary,
+`deu`-tagged audio track — video and existing audio are never re-encoded.
+
+```sh
+# 1) Dry run: see which local files match which episodes and the detected
+#    audio offsets, without writing anything
+aniworld https://aniworld.to/anime/stream/<series>/staffel-1 \
+  --dubsync-target ~/Anime/MyShow/Season01 --dubsync-dry-run
+
+# 2) Real run: writes <name>.dubsync.mkv next to each file (originals untouched)
+aniworld https://aniworld.to/anime/stream/<series>/staffel-1 \
+  --dubsync-target ~/Anime/MyShow/Season01
+```
+
+- **Automatic alignment** – the dub's offset against each file is detected by
+  correlating the shared music/SFX bed (works even though the dialogue differs).
+  Low-confidence detections fall back to offset 0 and are flagged for manual
+  verification. Use `--dubsync-offset <seconds>` to force a manual offset.
+  See [docs/dubsync-alignment.md](docs/dubsync-alignment.md) for how the
+  alignment algorithm works.
+- **Drift correction** – PAL-sourced dubs run ~4% fast, which a constant offset
+  can't fix. `--dubsync-allow-resample` corrects the drift with `atempo`
+  (re-encodes only the dub track; opt-in because it sacrifices bit-exactness).
+- **In-place mode** – `--dubsync-cleanup` replaces the originals
+  (temp + atomic swap) instead of writing `.dubsync.mkv` copies.
+- Files that already carry the dub language are skipped automatically; matching
+  handles common scene/Blu-ray naming (`Show - 01`, `S01E01`, `01v2`, …) and
+  reports unmatched files instead of guessing.
+- Also available in the Web UI: set defaults and enqueue DubSync jobs from the
+  Settings page; see the `ANIWORLD_DUBSYNC_*` keys in `.env.example` for
+  persistent configuration.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
