@@ -275,6 +275,67 @@ def parse_args():
     )
 
     # =========================
+    # DubSync (graft a web dub onto local archive-quality videos)
+    # =========================
+    dubsync = parser.add_argument_group(
+        "DubSync Options (graft a German dub onto local video files)"
+    )
+    dubsync.add_argument(
+        "-dt",
+        "--dubsync-target",
+        metavar="DIR",
+        help=(
+            "Directory of local (e.g. Blu-ray) videos to enrich with the dub "
+            "audio of the given AniWorld/SerienStream URL. Enables DubSync mode."
+        ),
+    )
+    dubsync.add_argument(
+        "-dO",
+        "--dubsync-offset",
+        type=float,
+        metavar="SECONDS",
+        help=(
+            "Manual dub delay in seconds (negative allowed). "
+            "Overrides automatic alignment."
+        ),
+    )
+    dubsync.add_argument(
+        "--dubsync-auto-align",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Detect the dub offset per episode automatically (default: on)",
+    )
+    dubsync.add_argument(
+        "--dubsync-allow-resample",
+        action="store_true",
+        help=(
+            "Correct linear drift (e.g. PAL-speed dubs) via atempo. "
+            "Re-encodes the dub track only; everything else stays lossless."
+        ),
+    )
+    dubsync.add_argument(
+        "--dubsync-cleanup",
+        action="store_true",
+        help=(
+            "Edit target files in place (temp + atomic replace) instead of "
+            "writing *.dubsync.mkv copies next to them"
+        ),
+    )
+    dubsync.add_argument(
+        "--dubsync-recursive",
+        action="store_true",
+        help="Scan the target directory recursively",
+    )
+    dubsync.add_argument(
+        "--dubsync-dry-run",
+        action="store_true",
+        help=(
+            "Print the match report and detected offsets without writing "
+            "to any target file"
+        ),
+    )
+
+    # =========================
     # Syncplay (only meaningful with --action Syncplay)
     # =========================
     syncplay = parser.add_argument_group(
@@ -354,6 +415,20 @@ def parse_args():
             logging.getLogger(name).setLevel(logging.DEBUG)
 
         logger.debug("Debug mode enabled")
+
+    if args.dubsync_target:
+        os.environ["ANIWORLD_DUBSYNC_TARGET_DIR"] = os.path.abspath(
+            args.dubsync_target
+        )
+        if args.dubsync_offset is not None:
+            os.environ["ANIWORLD_DUBSYNC_OFFSET"] = str(args.dubsync_offset)
+        os.environ["ANIWORLD_DUBSYNC_AUTO_ALIGN"] = (
+            "1" if args.dubsync_auto_align else "0"
+        )
+        if args.dubsync_allow_resample:
+            os.environ["ANIWORLD_DUBSYNC_ALLOW_RESAMPLE"] = "1"
+        if args.dubsync_cleanup:
+            os.environ["ANIWORLD_DUBSYNC_CLEANUP"] = "1"
 
     if args.action == "Syncplay":
         if args.syncplay_host:
