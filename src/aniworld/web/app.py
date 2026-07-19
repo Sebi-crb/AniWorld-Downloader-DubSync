@@ -459,6 +459,56 @@ def _fetch_public_ip():
     raise RuntimeError(last_error or "Failed to resolve public IP")
 
 
+def _run_dubsync_queue_item(item):
+    """Process a ``source == "dubsync"`` queue job.
+
+    The job parameters (target dir, offset, toggles) live as a single JSON
+    object in the ``episodes`` column; the AniWorld/SerienStream URL is the
+    item's ``series_url``. Progress inside a file comes through the global
+    ffmpeg progress snapshot like normal downloads.
+    """
+    from ..models.aniworld_to.dubsync.pipeline import (
+        dubsync_env_defaults,
+        run_dubsync,
+    )
+
+    payload = json.loads(item["episodes"])
+    job = payload[0] if isinstance(payload, list) else payload
+    defaults = dubsync_env_defaults()
+
+    raw_offset = job.get("offset")
+    offset = float(raw_offset) if raw_offset not in (None, "") else None
+
+    update_queue_progress(item["id"], 0, item.get("series_url") or "")
+    report, outcomes = run_dubsync(
+        item["series_url"],
+        job["target_dir"],
+        offset=offset,
+        audio_language=item.get("language") or defaults["audio_language"],
+        cleanup=bool(job.get("cleanup", defaults["cleanup"])),
+        auto_align=bool(job.get("auto_align", defaults["auto_align"])),
+        allow_resample=bool(
+            job.get("allow_resample", defaults["allow_resample"])
+        ),
+    )
+
+    failed = [o for o in outcomes if o.status == "failed"]
+    errors = [{"url": str(o.path), "error": o.detail} for o in failed]
+    if not report.pairs:
+        errors.append(
+            {
+                "url": job["target_dir"],
+                "error": "No local files matched the source episodes",
+            }
+        )
+    if errors:
+        update_queue_errors(item["id"], json.dumps(errors))
+
+    update_queue_progress(item["id"], 1, "")
+    all_failed = bool(errors) and (not outcomes or len(failed) == len(outcomes))
+    set_queue_status(item["id"], "failed" if all_failed else "completed")
+
+
 def _queue_worker():
     """Single global worker that processes one download at a time."""
     while True:
@@ -478,6 +528,17 @@ def _queue_worker():
 
             if not item:
                 time.sleep(3)
+                continue
+
+            if item.get("source") == "dubsync":
+                try:
+                    _run_dubsync_queue_item(item)
+                except Exception as e:
+                    logger.error(f"DubSync job failed: {e}", exc_info=True)
+                    update_queue_errors(
+                        item["id"], json.dumps([{"url": "", "error": str(e)}])
+                    )
+                    set_queue_status(item["id"], "failed")
                 continue
 
             episodes = json.loads(item["episodes"])
@@ -1745,6 +1806,85 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
         )
         return jsonify({"queue_id": queue_id})
 
+    @app.route("/api/dubsync", methods=["POST"])
+    def api_dubsync():
+        """Enqueue a DubSync job: graft the URL's dub onto local video files."""
+        from ..models.aniworld_to.dubsync.pipeline import dubsync_env_defaults
+
+        data = request.get_json(silent=True) or {}
+        defaults = dubsync_env_defaults()
+
+        url = str(data.get("url") or "").strip().replace(
+            "://s.to", "://serienstream.to"
+        )
+        target_dir = str(data.get("target_dir") or "").strip() or defaults[
+            "target_dir"
+        ]
+
+        if not url:
+            return jsonify({"error": "url is required"}), 400
+        if not target_dir:
+            return jsonify({"error": "target_dir is required"}), 400
+        if not os.path.isdir(os.path.expanduser(target_dir)):
+            return jsonify({"error": f"Not a directory: {target_dir}"}), 400
+
+        try:
+            prov = resolve_provider(url)
+        except Exception:
+            prov = None
+        valid = prov is not None and prov.name in ("AniWorld", "SerienStream") and (
+            (prov.series_pattern and prov.series_pattern.fullmatch(url))
+            or (prov.season_pattern and prov.season_pattern.fullmatch(url))
+        )
+        if not valid:
+            return jsonify(
+                {"error": "url must be an AniWorld/SerienStream series or season"}
+            ), 400
+
+        raw_offset = str(data.get("offset", "")).strip()
+        if raw_offset:
+            try:
+                float(raw_offset)
+            except ValueError:
+                return jsonify({"error": f"Invalid offset: {raw_offset}"}), 400
+
+        job = {
+            "target_dir": os.path.expanduser(target_dir),
+            "offset": raw_offset or None,
+            "auto_align": bool(data.get("auto_align", defaults["auto_align"])),
+            "allow_resample": bool(
+                data.get("allow_resample", defaults["allow_resample"])
+            ),
+            "cleanup": bool(data.get("cleanup", defaults["cleanup"])),
+        }
+
+        username = None
+        if auth_enabled:
+            user = get_current_user()
+            if user:
+                username = (
+                    user.get("username")
+                    if isinstance(user, dict)
+                    else getattr(user, "username", None)
+                )
+
+        parts = [p for p in url.rstrip("/").split("/") if p]
+        slug = parts[-1]
+        if slug.startswith("staffel-") and len(parts) >= 2:
+            slug = f"{parts[-2]} {slug}"
+        slug = slug.replace("-", " ").title()
+        queue_id = add_to_queue(
+            f"DubSync: {slug}",
+            url,
+            [job],
+            defaults["audio_language"],
+            "",
+            username,
+            source="dubsync",
+        )
+        _ensure_queue_worker()
+        return jsonify({"queue_id": queue_id})
+
     @app.route("/api/popular-movies")
     def api_popular_movies():
         try:
@@ -2124,6 +2264,15 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
                 "available_ui_languages": list(SUPPORTED_UI_LANGUAGES),
                 "available_output_formats": list(SUPPORTED_OUTPUT_FORMATS),
                 "discord": _discord_settings(),
+                "dubsync": {
+                    "target_dir": os.environ.get("ANIWORLD_DUBSYNC_TARGET_DIR", ""),
+                    "offset": os.environ.get("ANIWORLD_DUBSYNC_OFFSET", ""),
+                    "auto_align": os.environ.get("ANIWORLD_DUBSYNC_AUTO_ALIGN", "1"),
+                    "allow_resample": os.environ.get(
+                        "ANIWORLD_DUBSYNC_ALLOW_RESAMPLE", "0"
+                    ),
+                    "cleanup": os.environ.get("ANIWORLD_DUBSYNC_CLEANUP", "0"),
+                },
             }
         )
 
@@ -2231,6 +2380,35 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
             error = _apply_discord_settings(data["discord"], env_updates)
             if error:
                 return jsonify({"error": error}), 400
+
+        if "dubsync" in data:
+            ds = data["dubsync"] or {}
+            if "target_dir" in ds:
+                env_updates["ANIWORLD_DUBSYNC_TARGET_DIR"] = str(
+                    ds["target_dir"]
+                ).strip()
+            if "offset" in ds:
+                raw_offset = str(ds["offset"]).strip()
+                if raw_offset:
+                    try:
+                        float(raw_offset)
+                    except ValueError:
+                        return jsonify(
+                            {"error": f"Invalid dubsync offset: {raw_offset}"}
+                        ), 400
+                env_updates["ANIWORLD_DUBSYNC_OFFSET"] = raw_offset
+            if "auto_align" in ds:
+                env_updates["ANIWORLD_DUBSYNC_AUTO_ALIGN"] = (
+                    "1" if ds["auto_align"] else "0"
+                )
+            if "allow_resample" in ds:
+                env_updates["ANIWORLD_DUBSYNC_ALLOW_RESAMPLE"] = (
+                    "1" if ds["allow_resample"] else "0"
+                )
+            if "cleanup" in ds:
+                env_updates["ANIWORLD_DUBSYNC_CLEANUP"] = (
+                    "1" if ds["cleanup"] else "0"
+                )
 
         # Settings are intentionally in-memory only for the running process.
         # To persist across restarts, users set them in their .env file.

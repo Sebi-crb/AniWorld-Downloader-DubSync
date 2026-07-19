@@ -85,6 +85,30 @@
       "settings.ui_language": "Interface Language",
       "settings.ui_language_hint": "Language of this web interface.",
       "settings.interface": "Interface",
+      "settings.dubsync": "DubSync",
+      "settings.dubsync_hint":
+        "Graft a German dub from AniWorld/SerienStream losslessly onto your own archive-quality video files as a secondary audio track.",
+      "settings.dubsync_defaults": "Defaults",
+      "settings.dubsync_target_hint":
+        "Default directory of local video files (used when the enqueue form below leaves the folder empty).",
+      "settings.dubsync_offset": "Manual offset (seconds)",
+      "settings.dubsync_auto_align": "Automatic audio alignment",
+      "settings.dubsync_auto_align_hint":
+        "Detect each episode's dub offset by correlating the shared music/SFX bed. A manual offset always overrides detection.",
+      "settings.dubsync_allow_resample":
+        "Correct drift (re-encodes the dub track)",
+      "settings.dubsync_allow_resample_hint":
+        "Fixes PAL-speed dubs (~4% fast) via atempo. Only the added dub track is re-encoded; video and original audio stay untouched.",
+      "settings.dubsync_cleanup": "Edit files in place",
+      "settings.dubsync_cleanup_hint":
+        "When off, results are written as *.dubsync.mkv copies next to the originals (safe default).",
+      "settings.dubsync_enqueue": "Queue a DubSync job",
+      "settings.dubsync_enqueue_hint":
+        "The job runs through the normal download queue using the defaults above.",
+      "settings.dubsync_add": "Add to queue",
+      "settings.dubsync_saved": "DubSync defaults saved",
+      "settings.dubsync_need_url": "Enter a series or season URL",
+      "settings.dubsync_queued": "DubSync job added to queue",
       "settings.discord": "Discord Request Bot",
       "settings.discord.enable": "Enable Discord bot",
       "settings.discord.enable_hint":
@@ -199,6 +223,30 @@
       "settings.ui_language": "Sprache der Oberfläche",
       "settings.ui_language_hint": "Sprache dieser Weboberfläche.",
       "settings.interface": "Oberfläche",
+      "settings.dubsync": "DubSync",
+      "settings.dubsync_hint":
+        "Fügt einen deutschen Dub von AniWorld/SerienStream verlustfrei als zweite Tonspur in deine eigenen hochwertigen Videodateien ein.",
+      "settings.dubsync_defaults": "Standardwerte",
+      "settings.dubsync_target_hint":
+        "Standardordner der lokalen Videodateien (wird genutzt, wenn das Formular unten keinen Ordner angibt).",
+      "settings.dubsync_offset": "Manueller Versatz (Sekunden)",
+      "settings.dubsync_auto_align": "Automatische Tonspur-Ausrichtung",
+      "settings.dubsync_auto_align_hint":
+        "Erkennt den Versatz jeder Episode über die gemeinsame Musik-/Effektspur. Ein manueller Versatz hat immer Vorrang.",
+      "settings.dubsync_allow_resample":
+        "Drift korrigieren (kodiert die Dub-Spur neu)",
+      "settings.dubsync_allow_resample_hint":
+        "Behebt PAL-Geschwindigkeit (~4 % zu schnell) per atempo. Nur die neue Dub-Spur wird neu kodiert; Video und Originalton bleiben unberührt.",
+      "settings.dubsync_cleanup": "Dateien direkt bearbeiten",
+      "settings.dubsync_cleanup_hint":
+        "Wenn aus, werden Ergebnisse als *.dubsync.mkv-Kopien neben den Originalen gespeichert (sichere Voreinstellung).",
+      "settings.dubsync_enqueue": "DubSync-Auftrag einreihen",
+      "settings.dubsync_enqueue_hint":
+        "Der Auftrag läuft mit den obigen Standardwerten durch die normale Download-Warteschlange.",
+      "settings.dubsync_add": "Zur Warteschlange",
+      "settings.dubsync_saved": "DubSync-Standardwerte gespeichert",
+      "settings.dubsync_need_url": "Serien- oder Staffel-URL eingeben",
+      "settings.dubsync_queued": "DubSync-Auftrag zur Warteschlange hinzugefügt",
       "settings.discord": "Discord-Anfrage-Bot",
       "settings.discord.enable": "Discord-Bot aktivieren",
       "settings.discord.enable_hint":
