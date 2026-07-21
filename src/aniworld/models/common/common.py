@@ -356,13 +356,23 @@ def _run_ffmpeg_with_progress(node, overwrite_output=True, label=""):
     # Use shorter stats_period for smoother progress (1s in non-debug, 10s in debug)
     stats_period = "10" if debug_mode else "1"
 
-    args = ffmpeg.compile(node, overwrite_output=overwrite_output)
+    # Global options must come before the inputs/outputs: ffmpeg silently
+    # discards anything after the last output filename as "trailing options".
+    # ffmpeg-python appends -y at the very end, so compiling with
+    # overwrite_output=True never actually enabled overwriting -- a
+    # pre-existing output then blocks on ffmpeg's interactive prompt until
+    # the stall killer SIGKILLs the process.
+    args = ffmpeg.compile(node, overwrite_output=False)
+    head = []
     if "-stats_period" not in args:
-        args.insert(-1, "-stats_period")
-        args.insert(-1, stats_period)
+        head += ["-stats_period", stats_period]
+    if overwrite_output and "-y" not in args:
+        head.append("-y")
+    args[1:1] = head
 
     process = subprocess.Popen(
         args,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         universal_newlines=False,
@@ -556,10 +566,21 @@ def _finalize_episode(temp_path, episode_path, label=""):
     if target_ext == "mp4":
         output_kwargs["movflags"] = "+faststart"
 
+    # Map streams explicitly: without -map, ffmpeg's default selection keeps
+    # only ONE audio stream ("best" = highest channel count), which silently
+    # dropped DubSync's appended dub track on every mkv -> mp4 conversion.
+    # MP4 can't stream-copy Matroska subtitle/attachment formats, so only
+    # video + all audio go there; mkv keeps everything.
+    inp = ffmpeg.input(str(temp_path))
+    if target_ext == "mp4":
+        copy_streams = [inp["v?"], inp["a?"]]
+    else:
+        copy_streams = [inp["v?"], inp["a?"], inp["s?"], inp["d?"], inp["t?"]]
+
     try:
         logger.debug(f"[REMUXING] {source_ext} -> {target_ext}")
         _run_ffmpeg_with_progress(
-            ffmpeg.input(str(temp_path)).output(str(converted), **output_kwargs),
+            ffmpeg.output(*copy_streams, str(converted), **output_kwargs),
             label=label,
         )
     except RuntimeError:
@@ -570,7 +591,9 @@ def _finalize_episode(temp_path, episode_path, label=""):
         )
         converted.unlink(missing_ok=True)
         _run_ffmpeg_with_progress(
-            ffmpeg.input(str(temp_path)).output(
+            ffmpeg.output(
+                inp["v?"],
+                inp["a?"],
                 str(converted),
                 vcodec="libx264",
                 preset="veryfast",

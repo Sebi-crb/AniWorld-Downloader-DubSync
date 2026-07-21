@@ -115,6 +115,10 @@ aniworld https://aniworld.to/anime/stream/<series>/staffel-1 \
   auto-selected from your filenames. Defaults live on the Settings page; see
   the `ANIWORLD_DUBSYNC_*` keys in `.env.example` for persistent
   configuration.
+- **Movies too** – a show's "Filme" collection appears as its own *Movies*
+  section, and the site selector also offers MegaKino/FilmPalast for
+  standalone films. Movie filenames carry no episode numbers, so each movie
+  gets a dropdown to confirm its local file (best title match pre-selected).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

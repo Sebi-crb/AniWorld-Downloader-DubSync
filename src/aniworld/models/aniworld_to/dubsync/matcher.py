@@ -270,10 +270,12 @@ def build_source_index(source):
     abs_seen: dict = {}
     abs_dupes: set = set()
     season_numbers: set = set()
+    numberless: list = []
 
     for season_number, episode in _iter_source_episodes(source):
         number = getattr(episode, "episode_number", None)
         if number is None:
+            numberless.append((season_number, episode))
             continue
         season_numbers.add(season_number)
         by_key[(season_number, number)] = episode
@@ -281,6 +283,15 @@ def build_source_index(source):
             abs_dupes.add(number)
         else:
             abs_seen[number] = (season_number, episode)
+
+    # Movie-site sources (MegaKino/FilmPalast) resolve to a single episode
+    # object without an episode_number; treat a lone numberless episode as
+    # episode 1 so it stays addressable via (None, 1).
+    if not by_key and len(numberless) == 1:
+        season_number, episode = numberless[0]
+        by_key[(season_number, 1)] = episode
+        season_numbers.add(season_number)
+        abs_seen[1] = (season_number, episode)
 
     by_abs = {n: v for n, v in abs_seen.items() if n not in abs_dupes}
     return by_key, by_abs, season_numbers
@@ -291,6 +302,7 @@ def match_directory(
     source,
     recursive: bool = False,
     selected: Optional[Iterable[Tuple[Optional[int], int]]] = None,
+    explicit: Optional[Iterable[Tuple[Optional[int], int, str]]] = None,
 ) -> MatchReport:
     """Pair the video files in ``target_dir`` with *source*'s episodes.
 
@@ -303,10 +315,58 @@ def match_directory(
     ``selected`` optionally restricts pairing to the given
     ``(season, episode)`` keys (e.g. the user's checklist in the web UI);
     everything else in the source is treated as if it did not exist.
+
+    ``explicit`` provides user-confirmed ``(season, episode, filename)``
+    triples -- used for movies, whose filenames carry no season/episode
+    pattern. The filename may be a bare name, a path relative to
+    ``target_dir``, or absolute. Explicit pairs bypass filename parsing and
+    the ``selected`` filter; a triple whose source episode or local file
+    cannot be found lands in ``missing_sources``.
     """
 
     parsed, unmatched = scan_directory(target_dir, recursive=recursive)
     by_key, by_abs, season_numbers = build_source_index(source)
+
+    explicit_pairs: List[Tuple[ParsedFile, object]] = []
+    explicit_missing: List[Tuple[Optional[int], int]] = []
+    if explicit:
+        target = Path(target_dir)
+        all_paths = [pf.path for pf in parsed] + list(unmatched)
+
+        def _find_file(name: str) -> Optional[Path]:
+            for p in all_paths:
+                try:
+                    rel = str(p.relative_to(target))
+                except ValueError:
+                    rel = p.name
+                if name in (p.name, rel, str(p)):
+                    return p
+            return None
+
+        used_paths: set = set()
+        for s, e, fname in explicit:
+            key = (int(s) if s is not None else None, int(e))
+            matched_key = key
+            episode = by_key.get(key)
+            # Movie-site sources index their single film as (None, 1) while
+            # the web UI labels it season 1; fall back on episode number.
+            if episode is None and (None, key[1]) in by_key:
+                matched_key = (None, key[1])
+                episode = by_key[matched_key]
+            path = _find_file(fname)
+            if episode is None or path is None or path in used_paths:
+                explicit_missing.append(key)
+                continue
+            used_paths.add(path)
+            explicit_pairs.append(
+                (ParsedFile(path=path, season=key[0], episode=key[1]), episode)
+            )
+            by_key.pop(matched_key, None)
+            by_abs = {n: v for n, v in by_abs.items() if v[1] is not episode}
+
+        parsed = [pf for pf in parsed if pf.path not in used_paths]
+        unmatched = [p for p in unmatched if p not in used_paths]
+        season_numbers = {k[0] for k in by_key}
 
     if selected is not None:
         sel = {(s, int(e)) for s, e in selected}
@@ -317,6 +377,7 @@ def match_directory(
     single_season = next(iter(season_numbers)) if len(season_numbers) == 1 else None
 
     report = MatchReport(unmatched_files=list(unmatched))
+    report.pairs.extend(explicit_pairs)
     used_keys: set = set()
 
     for pf in parsed:
@@ -339,5 +400,7 @@ def match_directory(
         report.pairs.append((pf, episode))
         used_keys.add(matched_key)
 
-    report.missing_sources = [key for key in by_key if key not in used_keys]
+    report.missing_sources = [
+        key for key in by_key if key not in used_keys
+    ] + explicit_missing
     return report

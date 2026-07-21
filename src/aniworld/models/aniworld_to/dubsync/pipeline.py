@@ -222,6 +222,7 @@ def run_dubsync(
     allow_resample: bool = False,
     min_confidence: float = DEFAULT_MIN_CONFIDENCE,
     selected: Optional[Iterable[Tuple[Optional[int], int]]] = None,
+    explicit: Optional[Iterable[Tuple[Optional[int], int, str]]] = None,
 ) -> Tuple[MatchReport, List[FileOutcome]]:
     """Run DubSync over ``target_dir`` against ``source``.
 
@@ -246,12 +247,14 @@ def run_dubsync(
             discarded in favour of offset 0 (and flagged in the report).
         selected: restrict the run to these ``(season, episode)`` keys
             (``None`` processes every episode the matcher pairs).
+        explicit: user-confirmed ``(season, episode, filename)`` triples for
+            movies, whose filenames carry no parsable episode pattern.
 
     Returns ``(match_report, outcomes)``.
     """
 
     report = match_directory(
-        target_dir, source, recursive=recursive, selected=selected
+        target_dir, source, recursive=recursive, selected=selected, explicit=explicit
     )
     audio_code = _resolve_audio_code(audio_language)
 

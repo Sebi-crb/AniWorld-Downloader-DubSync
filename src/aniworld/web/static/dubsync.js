@@ -1,9 +1,9 @@
 // DubSync page: pick a local folder, search the show, auto-select the
 // episodes whose files exist locally, queue the graft job.
 
-let dsScan = null; // {files: [{name, season, episode}], unparsed: [name]}
+let dsScan = null; // {files: [{name, rel, season, episode}], unparsed: [{name, rel}]}
 let dsShow = null; // {url, title, poster_url}
-let dsSeasons = []; // [{url, season_number, episode_count}]
+let dsSeasons = []; // [{url, season_number, episode_count, are_movies}]
 let dsEpisodes = {}; // season_number -> [{episode_number, url, title_de, title_en, available_languages}]
 let dsPairs = {}; // "s:e" -> local filename (auto-match result)
 let dsBrowserCurrent = null; // path shown in the browser modal
@@ -63,6 +63,7 @@ async function dsRescan() {
   filesBox.textContent = "";
   if (!folder) {
     info.textContent = "";
+    if (dsSeasons.length) dsRenderEpisodes();
     dsApplyAutoSelection();
     return;
   }
@@ -81,42 +82,70 @@ async function dsRescan() {
     dsScan = data;
   } catch (e) {
     info.textContent = dsT("dubsync.scan_failed", "Scan failed: ") + e.message;
+    if (dsSeasons.length) dsRenderEpisodes();
     dsApplyAutoSelection();
     return;
   }
 
-  const n = dsScan.files.length;
+  // Neutral summary: a folder full of movies legitimately has no episode
+  // numbers, so lead with the total and only break down parsing when useful.
+  const nParsed = dsScan.files.length;
+  const nUnparsed = dsScan.unparsed.length;
+  const total = nParsed + nUnparsed;
   let text =
-    n +
+    total +
     " " +
-    (n === 1
-      ? dsT("dubsync.scan_one", "video file recognised")
-      : dsT("dubsync.scan_many", "video files recognised"));
-  if (dsScan.unparsed.length) {
+    (total === 1
+      ? dsT("dubsync.scan_found_one", "video file found")
+      : dsT("dubsync.scan_found_many", "video files found"));
+  if (nParsed && nUnparsed) {
     text +=
-      ", " +
-      dsScan.unparsed.length +
+      " (" +
+      nParsed +
       " " +
-      dsT("dubsync.scan_unparsed", "without a readable episode number");
+      dsT("dubsync.scan_with_ep", "with episode numbers") +
+      ", " +
+      nUnparsed +
+      " " +
+      dsT("dubsync.scan_without_ep", "without") +
+      ")";
+  } else if (!nParsed && nUnparsed) {
+    text +=
+      " (" +
+      dsT(
+        "dubsync.scan_movies_ok",
+        "no episode numbers in the filenames — fine for movies"
+      ) +
+      ")";
   }
   info.textContent = text;
 
-  // Compact chip list of what was parsed, e.g. "S1E01 · file.mkv".
-  for (const f of dsScan.files.slice(0, 60)) {
+  // Movie dropdowns list every video file; rebuild them for the new scan.
+  if (dsSeasons.length) dsRenderEpisodes();
+
+  // Compact chip list: "S1E01 · file.mkv" for parsed files, "🎬 file.mkv"
+  // for files without an episode number (typically movies).
+  const chips = dsScan.files
+    .map((f) => {
+      const season = f.season === null ? "?" : f.season;
+      return (
+        "S" + season + "E" + String(f.episode).padStart(2, "0") + " · " + f.name
+      );
+    })
+    .concat(dsScan.unparsed.map((u) => "🎬 " + u.name));
+  for (const label of chips.slice(0, 60)) {
     const chip = document.createElement("span");
     chip.style.cssText =
       "display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;" +
       "border-radius:8px;background:rgba(37,99,235,0.12);color:#9db8e8;" +
       "font-size:0.75rem;";
-    const season = f.season === null ? "?" : f.season;
-    chip.textContent =
-      "S" + season + "E" + String(f.episode).padStart(2, "0") + " · " + f.name;
+    chip.textContent = label;
     filesBox.appendChild(chip);
   }
-  if (dsScan.files.length > 60) {
+  if (chips.length > 60) {
     const more = document.createElement("span");
     more.className = "settings-hint";
-    more.textContent = "+" + (dsScan.files.length - 60) + " …";
+    more.textContent = "+" + (chips.length - 60) + " …";
     filesBox.appendChild(more);
   }
 
@@ -318,12 +347,16 @@ async function dsSelectShow(item) {
       dsEpisodes[s.season_number] = episodeResults[i].episodes || [];
     });
 
-    state.textContent =
-      dsSeasons.length +
-      " " +
-      (dsSeasons.length === 1
-        ? dsT("dubsync.season_one", "season")
-        : dsT("dubsync.season_many", "seasons"));
+    if (dsSeasons.length && dsSeasons.every((s) => s.are_movies)) {
+      state.textContent = dsT("dubsync.movie_source", "Movie");
+    } else {
+      state.textContent =
+        dsSeasons.length +
+        " " +
+        (dsSeasons.length === 1
+          ? dsT("dubsync.season_one", "season")
+          : dsT("dubsync.season_many", "seasons"));
+    }
     dsRenderEpisodes();
     dsApplyAutoSelection();
   } catch (e) {
@@ -355,18 +388,95 @@ function dsRenderEpisodes() {
     all.style.cssText = "accent-color:#2563eb;cursor:pointer;";
     all.dataset.season = sn;
     all.onchange = () => {
-      block
-        .querySelectorAll("input[data-ep]")
-        .forEach((cb) => (cb.checked = all.checked));
+      block.querySelectorAll("input[data-ep]").forEach((cb) => {
+        // movie checkboxes stay disabled until a local file is chosen
+        if (!cb.disabled) cb.checked = all.checked;
+      });
       dsUpdateSummary();
     };
     head.appendChild(all);
     head.appendChild(
       document.createTextNode(
-        dsT("dubsync.season_label", "Season") + " " + sn
+        season.are_movies
+          ? dsT("dubsync.movies", "Movies")
+          : dsT("dubsync.season_label", "Season") + " " + sn
       )
     );
     block.appendChild(head);
+
+    if (season.are_movies) {
+      // Movies carry no episode pattern in their filenames, so each one
+      // gets an explicit local-file dropdown instead of automatic matching.
+      const hint = document.createElement("div");
+      hint.className = "settings-hint";
+      hint.style.cssText = "margin:-2px 0 8px;";
+      hint.textContent = dsT(
+        "dubsync.movies_hint",
+        "Pick the local file for each movie; the best title match is pre-selected."
+      );
+      block.appendChild(hint);
+
+      const fileRels = dsAllFileRels();
+      for (const ep of episodes) {
+        const row = document.createElement("div");
+        row.style.cssText =
+          "display:flex;align-items:center;gap:10px;color:#c8cad0;" +
+          "font-size:0.85rem;margin-bottom:6px;flex-wrap:wrap;";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.style.cssText = "accent-color:#2563eb;cursor:pointer;flex-shrink:0;";
+        cb.dataset.ep = ep.episode_number;
+        cb.dataset.season = sn;
+        cb.dataset.movie = "1";
+        cb.disabled = true;
+        cb.title = dsT("dubsync.movie_need_file", "Choose a local file first");
+        cb.onchange = dsUpdateSummary;
+        row.appendChild(cb);
+
+        const label = document.createElement("span");
+        label.style.cssText =
+          "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
+          "flex:1 1 180px;min-width:0;";
+        const epTitle = ep.title_de || ep.title_en || "";
+        label.textContent =
+          epTitle || dsT("dubsync.movie_n", "Movie") + " " + ep.episode_number;
+        row.appendChild(label);
+
+        const langs = ep.available_languages || [];
+        if (langs.length && !langs.includes("German Dub")) {
+          const warn = document.createElement("span");
+          warn.title = dsT("dubsync.no_dub", "No German Dub available");
+          warn.textContent = "⚠";
+          warn.style.cssText = "color:#eab308;flex-shrink:0;";
+          row.appendChild(warn);
+        }
+
+        const sel = document.createElement("select");
+        sel.className = "sync-select";
+        sel.style.cssText = "flex:0 1 320px;min-width:180px;font-size:0.82rem;";
+        sel.dataset.movieSel = sn + ":" + ep.episode_number;
+        const none = document.createElement("option");
+        none.value = "";
+        none.textContent = dsT("dubsync.movie_no_file", "— choose local file —");
+        sel.appendChild(none);
+        for (const rel of fileRels) {
+          const opt = document.createElement("option");
+          opt.value = rel;
+          opt.textContent = rel;
+          sel.appendChild(opt);
+        }
+        sel.onchange = () => {
+          cb.disabled = !sel.value;
+          cb.checked = !!sel.value;
+          dsUpdateSummary();
+        };
+        row.appendChild(sel);
+
+        block.appendChild(row);
+      }
+      box.appendChild(block);
+      continue;
+    }
 
     const grid = document.createElement("div");
     grid.style.cssText =
@@ -417,6 +527,51 @@ function dsRenderEpisodes() {
   }
 }
 
+// Every scanned video file (parsed or not) as a path relative to the folder,
+// for the movie pairing dropdowns.
+function dsAllFileRels() {
+  if (!dsScan) return [];
+  const rels = dsScan.files
+    .map((f) => f.rel || f.name)
+    .concat(dsScan.unparsed.map((u) => u.rel || u.name));
+  return [...new Set(rels)].sort();
+}
+
+// ===== Movie title matching (fuzzy filename <-> title guess) =====
+
+const DS_NOISE_TOKENS = new Set([
+  "1080p", "720p", "2160p", "480p", "bluray", "blu", "ray", "bdrip", "brrip",
+  "web", "webrip", "webdl", "dl", "hdtv", "x264", "x265", "h264", "h265",
+  "hevc", "avc", "aac", "ac3", "eac3", "dts", "flac", "opus", "german",
+  "deutsch", "english", "ger", "eng", "japanese", "jap", "dub", "sub",
+  "subbed", "dubbed", "dual", "multi", "remux", "hdr", "uhd", "sdr",
+  "the", "der", "die", "das", "film", "movie",
+]);
+
+function dsNormTokens(s) {
+  let text = String(s || "").toLowerCase();
+  text = text.replace(/\.[a-z0-9]{2,4}$/, ""); // extension
+  text = text.replace(/\[[^\]]*\]|\([^)]*\)/g, " "); // release groups, years
+  text = text.replace(/[^a-z0-9äöüß]+/g, " ");
+  return text
+    .split(/\s+/)
+    .filter(
+      (t) => t && !DS_NOISE_TOKENS.has(t) && !/^(19|20)\d\d$/.test(t)
+    );
+}
+
+// Dice coefficient over token sets: 0 (nothing shared) .. 1 (same tokens).
+function dsTitleScore(a, b) {
+  const ta = new Set(dsNormTokens(a));
+  const tb = new Set(dsNormTokens(b));
+  if (!ta.size || !tb.size) return 0;
+  let inter = 0;
+  ta.forEach((t) => {
+    if (tb.has(t)) inter++;
+  });
+  return (2 * inter) / (ta.size + tb.size);
+}
+
 // Mirror of the backend matcher's season resolution: filename season if
 // present, else the source's single season, else 1 — plus the
 // absolute-numbering fallback for globally-unique episode numbers.
@@ -434,9 +589,13 @@ function dsApplyAutoSelection() {
     return;
   }
 
+  // Movie collections pair via the explicit dropdowns below, never via
+  // filename episode numbers.
+  const epSeasons = dsSeasons.filter((s) => !s.are_movies);
+
   const byKey = new Set();
   const absCount = {};
-  for (const season of dsSeasons) {
+  for (const season of epSeasons) {
     for (const ep of dsEpisodes[season.season_number] || []) {
       byKey.add(season.season_number + ":" + ep.episode_number);
       absCount[ep.episode_number] = (absCount[ep.episode_number] || []).concat(
@@ -445,10 +604,10 @@ function dsApplyAutoSelection() {
     }
   }
   const singleSeason =
-    dsSeasons.length === 1 ? dsSeasons[0].season_number : null;
+    epSeasons.length === 1 ? epSeasons[0].season_number : null;
 
   document
-    .querySelectorAll("#dsSeasons input[data-ep]")
+    .querySelectorAll("#dsSeasons input[data-ep]:not([data-movie])")
     .forEach((cb) => (cb.checked = false));
 
   const unpaired = [];
@@ -484,24 +643,72 @@ function dsApplyAutoSelection() {
     }
   }
 
+  // Movie auto-pairing: guess each movie's local file by title similarity.
+  const movieEntries = [];
+  for (const season of dsSeasons) {
+    if (!season.are_movies) continue;
+    for (const ep of dsEpisodes[season.season_number] || []) {
+      movieEntries.push({
+        key: season.season_number + ":" + ep.episode_number,
+        title: ep.title_de || ep.title_en || "",
+      });
+    }
+  }
+  const fileRels = dsAllFileRels();
+  const usedRels = new Set();
+  if (movieEntries.length === 1 && fileRels.length === 1) {
+    // one movie, one file: unambiguous
+    dsSetMoviePair(movieEntries[0].key, fileRels[0]);
+    usedRels.add(fileRels[0]);
+  } else {
+    for (const movie of movieEntries) {
+      let best = null;
+      let bestScore = 0;
+      for (const rel of fileRels) {
+        if (usedRels.has(rel)) continue;
+        const score = dsTitleScore(movie.title, rel);
+        if (score > bestScore) {
+          best = rel;
+          bestScore = score;
+        }
+      }
+      if (best && bestScore >= 0.35) {
+        dsSetMoviePair(movie.key, best);
+        usedRels.add(best);
+      }
+    }
+  }
+
   const notes = [];
-  if (unpaired.length) {
+  const unpairedLeft = unpaired.filter((f) => !usedRels.has(f.rel || f.name));
+  if (unpairedLeft.length) {
     notes.push(
-      unpaired.length +
+      unpairedLeft.length +
         " " +
         dsT("dubsync.unpaired", "local file(s) have no matching episode: ") +
-        unpaired
+        unpairedLeft
           .slice(0, 5)
           .map((f) => f.name)
           .join(", ") +
-        (unpaired.length > 5 ? ", …" : "")
+        (unpairedLeft.length > 5 ? ", …" : "")
     );
   }
-  if (dsScan && dsScan.unparsed.length) {
+  // When the source has a Movies section, files without episode numbers are
+  // normal candidates for the movie dropdowns, not a problem to warn about.
+  const hasMovies = dsSeasons.some((s) => s.are_movies);
+  const unparsedLeft = hasMovies
+    ? []
+    : ((dsScan && dsScan.unparsed) || []).filter(
+        (u) => !usedRels.has(u.rel || u.name)
+      );
+  if (unparsedLeft.length) {
     notes.push(
       dsT("dubsync.unparsed_note", "Not recognised: ") +
-        dsScan.unparsed.slice(0, 5).join(", ") +
-        (dsScan.unparsed.length > 5 ? ", …" : "")
+        unparsedLeft
+          .slice(0, 5)
+          .map((u) => u.name)
+          .join(", ") +
+        (unparsedLeft.length > 5 ? ", …" : "")
     );
   }
   for (const note of notes) {
@@ -515,36 +722,94 @@ function dsApplyAutoSelection() {
   dsUpdateSummary();
 }
 
+// Reflect a movie's auto-guessed local file in its dropdown + checkbox.
+function dsSetMoviePair(key, rel) {
+  const sel = document.querySelector(
+    '#dsSeasons select[data-movie-sel="' + key + '"]'
+  );
+  if (!sel) return;
+  sel.value = rel;
+  const [s, e] = key.split(":");
+  const cb = document.querySelector(
+    '#dsSeasons input[data-movie][data-season="' + s + '"][data-ep="' + e + '"]'
+  );
+  if (cb) {
+    cb.disabled = false;
+    cb.checked = true;
+  }
+}
+
 function dsSelectedEpisodes() {
   const selected = [];
-  document.querySelectorAll("#dsSeasons input[data-ep]").forEach((cb) => {
-    if (cb.checked)
-      selected.push([parseInt(cb.dataset.season, 10), parseInt(cb.dataset.ep, 10)]);
-  });
+  document
+    .querySelectorAll("#dsSeasons input[data-ep]:not([data-movie])")
+    .forEach((cb) => {
+      if (cb.checked)
+        selected.push([
+          parseInt(cb.dataset.season, 10),
+          parseInt(cb.dataset.ep, 10),
+        ]);
+    });
+  return selected;
+}
+
+// Checked movies with a confirmed local file, as [season, episode, filename].
+function dsSelectedMovies() {
+  const selected = [];
+  document
+    .querySelectorAll("#dsSeasons input[data-ep][data-movie]")
+    .forEach((cb) => {
+      if (!cb.checked) return;
+      const key = cb.dataset.season + ":" + cb.dataset.ep;
+      const sel = document.querySelector(
+        '#dsSeasons select[data-movie-sel="' + key + '"]'
+      );
+      if (sel && sel.value)
+        selected.push([
+          parseInt(cb.dataset.season, 10),
+          parseInt(cb.dataset.ep, 10),
+          sel.value,
+        ]);
+    });
   return selected;
 }
 
 function dsUpdateSummary() {
-  const n = dsSelectedEpisodes().length;
+  const nEp = dsSelectedEpisodes().length;
+  const nMov = dsSelectedMovies().length;
   const folder = document.getElementById("dsFolder").value.trim();
   const summary = document.getElementById("dsSummary");
   const btn = document.getElementById("dsEnqueueBtn");
 
   if (!dsShow || !folder) {
-    summary.textContent = t(
+    summary.textContent = dsT(
       "dubsync.summary_incomplete",
       "Pick a folder and a show first"
     );
     btn.disabled = true;
     return;
   }
-  summary.textContent =
-    n +
-    " " +
-    (n === 1
-      ? dsT("dubsync.summary_one", "episode selected")
-      : dsT("dubsync.summary_many", "episodes selected"));
-  btn.disabled = n === 0;
+  const parts = [];
+  if (nEp || !nMov) {
+    parts.push(
+      nEp +
+        " " +
+        (nEp === 1
+          ? dsT("dubsync.summary_one", "episode selected")
+          : dsT("dubsync.summary_many", "episodes selected"))
+    );
+  }
+  if (nMov) {
+    parts.push(
+      nMov +
+        " " +
+        (nMov === 1
+          ? dsT("dubsync.summary_movie_one", "movie selected")
+          : dsT("dubsync.summary_movie_many", "movies selected"))
+    );
+  }
+  summary.textContent = parts.join(", ");
+  btn.disabled = nEp + nMov === 0;
 }
 
 // ===== Enqueue =====
@@ -552,7 +817,8 @@ function dsUpdateSummary() {
 async function dsEnqueue() {
   const folder = document.getElementById("dsFolder").value.trim();
   const episodes = dsSelectedEpisodes();
-  if (!dsShow || !folder || !episodes.length) return;
+  const pairs = dsSelectedMovies();
+  if (!dsShow || !folder || (!episodes.length && !pairs.length)) return;
 
   const btn = document.getElementById("dsEnqueueBtn");
   btn.disabled = true;
@@ -569,17 +835,49 @@ async function dsEnqueue() {
         cleanup: document.getElementById("dsCleanup").checked,
         recursive: document.getElementById("dsRecursive").checked,
         episodes: episodes,
+        pairs: pairs,
       }),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || resp.statusText);
-    showToast(dsT("dubsync.queued", "DubSync job added to queue"));
+    showToast("✓ " + dsT("dubsync.queued", "DubSync job added to queue"));
+    dsShowQueuedConfirmation();
   } catch (e) {
     showToast(dsT("dubsync.queue_failed", "Failed to enqueue: ") + e.message);
+    dsUpdateSummary();
   } finally {
     btn.disabled = false;
-    dsUpdateSummary();
   }
+}
+
+// Inline confirmation next to the button: green check + a link that opens
+// the queue. Any later selection change redraws the summary over it.
+function dsShowQueuedConfirmation() {
+  const summary = document.getElementById("dsSummary");
+  summary.textContent = "";
+
+  const ok = document.createElement("span");
+  ok.style.cssText = "color:#4ade80;font-weight:600;";
+  ok.textContent = "✓ " + dsT("dubsync.queued", "DubSync job added to queue");
+  summary.appendChild(ok);
+
+  const link = document.createElement("a");
+  link.href = "#";
+  link.textContent = dsT("dubsync.view_queue", "View queue");
+  link.style.cssText = "margin-left:12px;color:#6ea8fe;";
+  link.onclick = (ev) => {
+    ev.preventDefault();
+    if (typeof openQueueModal === "function") openQueueModal();
+  };
+  summary.appendChild(link);
+
+  // brief visual feedback on the button itself
+  const btn = document.getElementById("dsEnqueueBtn");
+  const original = btn.textContent;
+  btn.textContent = "✓ " + dsT("dubsync.added", "Added");
+  setTimeout(() => {
+    btn.textContent = original;
+  }, 2000);
 }
 
 document.addEventListener("DOMContentLoaded", dsInit);

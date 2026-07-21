@@ -3,8 +3,9 @@ endblock %} {% block content %}
 <div class="settings-container" style="max-width: 1100px">
   <h1>DubSync</h1>
   <p class="settings-hint" style="margin-bottom: 24px" data-i18n="dubsync.page_hint">
-    Graft a German dub from AniWorld/SerienStream losslessly onto your own
-    archive-quality video files as an additional audio track.
+    Graft a German dub from AniWorld, SerienStream or a movie site losslessly
+    onto your own archive-quality series and movie files as an additional
+    audio track.
   </p>
 
   <!-- Step 1: local folder -->
@@ -12,7 +13,7 @@ endblock %} {% block content %}
     <h2><span data-i18n="dubsync.step1">1. Local folder</span></h2>
     <div class="settings-hint" data-i18n="dubsync.step1_hint">
       Pick the folder that holds your local video files. Filenames are scanned
-      for season/episode numbers.
+      for season/episode numbers; movie files don't need any.
     </div>
     <div class="settings-row" style="margin-top: 10px">
       <input type="text" id="dsFolder" placeholder="/path/to/local/videos" onchange="dsFolderChanged()" />
@@ -38,12 +39,14 @@ endblock %} {% block content %}
   <div class="settings-section">
     <h2><span data-i18n="dubsync.step2">2. Show</span></h2>
     <div class="settings-hint" data-i18n="dubsync.step2_hint">
-      Search AniWorld/SerienStream for the show the dub should come from.
+      Search for the show or movie the dub should come from.
     </div>
     <div class="settings-row" style="margin-top: 10px">
       <select id="dsSite" class="sync-select" style="max-width: 160px">
         <option value="aniworld">AniWorld</option>
         <option value="sto">SerienStream</option>
+        <option value="megakino">MegaKino</option>
+        <option value="filmpalast">FilmPalast</option>
       </select>
       <input type="text" id="dsSearch" placeholder="Search…" onkeydown="if (event.key === 'Enter') dsSearchShows()" />
       <button onclick="dsSearchShows()" data-i18n="dubsync.search">Search</button>
@@ -54,82 +57,132 @@ endblock %} {% block content %}
 
   <!-- Step 3: episodes -->
   <div class="settings-section" id="dsEpisodesSection" style="display: none">
-    <h2><span data-i18n="dubsync.step3">3. Episodes</span></h2>
+    <h2><span data-i18n="dubsync.step3">3. Episodes &amp; movies</span></h2>
     <div class="settings-hint" data-i18n="dubsync.step3_hint">
-      Episodes matching your local files are pre-selected. Adjust the
-      selection before queueing.
+      Episodes matching your local files are pre-selected. Movies have no
+      episode numbers in their filenames, so each one gets a dropdown to
+      confirm its local file. Adjust the selection before queueing.
     </div>
     <div id="dsSeasons" style="margin-top: 12px"></div>
     <div id="dsMatchWarnings" style="margin-top: 10px"></div>
   </div>
 
   <!-- Step 4: options + enqueue -->
+  <style>
+    .ds-help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #8b8fa3;
+      font-size: 0.68rem;
+      font-weight: 700;
+      cursor: help;
+      user-select: none;
+    }
+    .ds-help:hover {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+    .ds-opt {
+      margin-top: 16px;
+    }
+    .ds-opt-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      color: #e0e0e0;
+      cursor: pointer;
+    }
+    .ds-opt-label input[type="checkbox"] {
+      accent-color: #2563eb;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .ds-opt .settings-hint {
+      margin: 4px 0 0 24px;
+    }
+    #dsOffset {
+      width: 140px;
+      margin-top: 8px;
+      padding: 9px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      outline: none;
+      font-family: "SF Mono", "Fira Code", monospace;
+      transition:
+        border-color 0.2s,
+        box-shadow 0.2s;
+    }
+    #dsOffset:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+    #dsOffset::placeholder {
+      color: #6b6f7e;
+    }
+  </style>
   <div class="settings-section">
     <h2><span data-i18n="dubsync.step4">4. Options</span></h2>
     <div class="settings-hint" data-i18n="dubsync.step4_hint">
-      Prefilled from the DubSync defaults in Settings; changes here apply to
-      this job only.
-    </div>
-    <div class="settings-row" style="gap: 10px; flex-wrap: wrap; margin-top: 10px">
-      <div style="flex: 0 1 220px" data-i18n-title="dubsync.offset_tip" title="Example: -0.5 starts the dub half a second earlier. When set, automatic alignment is skipped for every episode.">
-        <label class="planned-label" data-i18n="dubsync.offset">Manual offset (seconds)</label>
-        <input type="text" id="dsOffset" placeholder="auto" style="width: 100%" />
-      </div>
-    </div>
-    <div class="settings-hint" data-i18n="dubsync.offset_hint">
-      Fixed dub delay in seconds (negative allowed). Leave empty to let
-      automatic alignment decide per episode.
-    </div>
-    <label class="settings-checkbox" style="
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 14px;
-        font-size: 0.88rem;
-        color: #c8cad0;
-        cursor: pointer;
-      " data-i18n-title="dubsync.auto_align_tip" title="Low-confidence detections fall back to 0 s and are flagged in the queue so you can verify them by ear.">
-      <input type="checkbox" id="dsAutoAlign" style="accent-color: #2563eb; cursor: pointer" />
-      <span data-i18n="dubsync.auto_align">Automatic audio alignment</span>
-    </label>
-    <div class="settings-hint" data-i18n="settings.dubsync_auto_align_hint">
-      Detect each episode's dub offset by correlating the shared music/SFX bed.
-      A manual offset always overrides detection.
-    </div>
-    <label class="settings-checkbox" style="
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 14px;
-        font-size: 0.88rem;
-        color: #c8cad0;
-        cursor: pointer;
-      " data-i18n-title="dubsync.allow_resample_tip" title="Only used when linear drift is actually detected (e.g. PAL-sourced dubs running ~4% fast). The dub is re-encoded to FLAC; video and original audio stay bit-exact.">
-      <input type="checkbox" id="dsAllowResample" style="accent-color: #2563eb; cursor: pointer" />
-      <span data-i18n="dubsync.allow_resample">Correct drift (re-encodes the dub track)</span>
-    </label>
-    <div class="settings-hint" data-i18n="settings.dubsync_allow_resample_hint">
-      Fixes PAL-speed dubs (~4% fast) via atempo. Only the added dub track is
-      re-encoded; video and original audio stay untouched.
-    </div>
-    <label class="settings-checkbox" style="
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 14px;
-        font-size: 0.88rem;
-        color: #c8cad0;
-        cursor: pointer;
-      " data-i18n-title="dubsync.cleanup_tip" title="In-place editing writes to a temp file first and atomically replaces the original only after the mux succeeded.">
-      <input type="checkbox" id="dsCleanup" style="accent-color: #2563eb; cursor: pointer" />
-      <span data-i18n="dubsync.cleanup">Edit files in place</span>
-    </label>
-    <div class="settings-hint" data-i18n="settings.dubsync_cleanup_hint">
-      When off, results are written as *.dubsync.mkv copies next to the
-      originals (safe default).
+      The usual settings work for most jobs — you can just press Add to queue.
     </div>
 
-    <div class="settings-row" style="margin-top: 18px; align-items: center; gap: 14px">
+    <div class="ds-opt">
+      <label class="ds-opt-label">
+        <input type="checkbox" id="dsAutoAlign" />
+        <span data-i18n="dubsync.auto_align">Fix timing automatically (recommended)</span>
+        <span class="ds-help" data-i18n-title="dubsync.auto_align_tip" title="The dub comes from a stream that may start a little earlier or later than your file. DubSync listens for the music and sound effects both versions share and shifts the dub so it lines up. If it is not confident, it leaves the timing as-is and marks the job in the queue so you can check by ear.">?</span>
+      </label>
+      <div class="settings-hint" data-i18n="dubsync.auto_align_desc">
+        Lines the dub up with your video by comparing the two soundtracks.
+      </div>
+    </div>
+
+    <div class="ds-opt">
+      <label class="ds-opt-label">
+        <input type="checkbox" id="dsAllowResample" />
+        <span data-i18n="dubsync.allow_resample">Fix wrong playback speed</span>
+        <span class="ds-help" data-i18n-title="dubsync.allow_resample_tip" title="Dubs taken from TV broadcasts sometimes run about 4% too fast. Fixing that means the dub track is converted once — your video and its original audio are never touched. Only kicks in when a speed difference is actually found.">?</span>
+      </label>
+      <div class="settings-hint" data-i18n="dubsync.allow_resample_desc">
+        Some dubs run slightly too fast; this slows the dub down to match your
+        video.
+      </div>
+    </div>
+
+    <div class="ds-opt">
+      <label class="ds-opt-label">
+        <input type="checkbox" id="dsCleanup" />
+        <span data-i18n="dubsync.cleanup">Add the dub directly into my files</span>
+        <span class="ds-help" data-i18n-title="dubsync.cleanup_tip" title="Even with this on, your original is only replaced after the new version was written completely and successfully — a failed job never damages your files.">?</span>
+      </label>
+      <div class="settings-hint" data-i18n="dubsync.cleanup_desc">
+        When off, a new copy named *.dubsync.mkv is saved next to each file —
+        the safe choice.
+      </div>
+    </div>
+
+    <div class="ds-opt">
+      <label class="ds-opt-label" style="cursor: default">
+        <span data-i18n="dubsync.offset">Dub timing (seconds)</span>
+        <span class="ds-help" data-i18n-title="dubsync.offset_tip" title="Only needed when the dub is consistently too early or too late in every episode. Example: -0.5 starts the dub half a second earlier. Entering a value here turns off the automatic timing above.">?</span>
+      </label>
+      <input type="text" id="dsOffset" data-i18n-placeholder="dubsync.offset_auto" placeholder="automatic" />
+      <div class="settings-hint" style="margin-left: 0" data-i18n="dubsync.offset_desc">
+        Leave empty — the timing is worked out automatically.
+      </div>
+    </div>
+
+    <div class="settings-row" style="margin-top: 22px; align-items: center; gap: 14px">
       <button id="dsEnqueueBtn" onclick="dsEnqueue()" disabled data-i18n="dubsync.add">Add to queue</button>
       <span id="dsSummary" class="settings-hint" style="margin: 0"></span>
     </div>

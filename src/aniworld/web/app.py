@@ -481,9 +481,19 @@ def _run_dubsync_queue_item(item):
 
     raw_selected = job.get("episodes")
     selected = None
-    if isinstance(raw_selected, list) and raw_selected:
+    if isinstance(raw_selected, list):
+        # an empty list is meaningful: movie-only jobs restrict episode
+        # matching to nothing and work purely off the explicit pairs
         selected = [
             (int(s) if s is not None else None, int(e)) for s, e in raw_selected
+        ]
+
+    raw_pairs = job.get("pairs")
+    explicit = None
+    if isinstance(raw_pairs, list) and raw_pairs:
+        explicit = [
+            (int(s) if s is not None else None, int(e), str(f))
+            for s, e, f in raw_pairs
         ]
 
     update_queue_progress(item["id"], 0, item.get("series_url") or "")
@@ -499,6 +509,7 @@ def _run_dubsync_queue_item(item):
             job.get("allow_resample", defaults["allow_resample"])
         ),
         selected=selected,
+        explicit=explicit,
     )
 
     failed = [o for o in outcomes if o.status == "failed"]
@@ -1841,13 +1852,27 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
             prov = resolve_provider(url)
         except Exception:
             prov = None
-        valid = prov is not None and prov.name in ("AniWorld", "SerienStream") and (
-            (prov.series_pattern and prov.series_pattern.fullmatch(url))
-            or (prov.season_pattern and prov.season_pattern.fullmatch(url))
+        valid = prov is not None and (
+            (
+                prov.name in ("AniWorld", "SerienStream")
+                and (
+                    (prov.series_pattern and prov.series_pattern.fullmatch(url))
+                    or (prov.season_pattern and prov.season_pattern.fullmatch(url))
+                )
+            )
+            # movie sites: the movie page URL itself is the source
+            or (
+                prov.name in ("MegaKino", "FilmPalast")
+                and prov.series_pattern
+                and prov.series_pattern.fullmatch(url)
+            )
         )
         if not valid:
             return jsonify(
-                {"error": "url must be an AniWorld/SerienStream series or season"}
+                {
+                    "error": "url must be an AniWorld/SerienStream series or "
+                    "season, or a MegaKino/FilmPalast movie"
+                }
             ), 400
 
         raw_offset = str(data.get("offset", "")).strip()
@@ -1858,12 +1883,13 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
                 return jsonify({"error": f"Invalid offset: {raw_offset}"}), 400
 
         # Optional episode restriction from the DubSync page's checklist:
-        # a list of [season, episode] pairs.
+        # a list of [season, episode] pairs. May be empty when the job is
+        # movie-only (pairs below carry the work instead).
         raw_episodes = data.get("episodes")
         selected = None
         if raw_episodes is not None:
-            if not isinstance(raw_episodes, list) or not raw_episodes:
-                return jsonify({"error": "episodes must be a non-empty list"}), 400
+            if not isinstance(raw_episodes, list):
+                return jsonify({"error": "episodes must be a list"}), 400
             try:
                 selected = [
                     [int(s) if s is not None else None, int(e)]
@@ -1873,6 +1899,30 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
                 return jsonify(
                     {"error": "episodes must be [season, episode] pairs"}
                 ), 400
+
+        # Optional movie pairings: [season, episode, filename] triples, the
+        # filename being the user-confirmed local file for that movie.
+        raw_pairs = data.get("pairs")
+        pairs = None
+        if raw_pairs is not None:
+            if not isinstance(raw_pairs, list):
+                return jsonify({"error": "pairs must be a list"}), 400
+            try:
+                pairs = [
+                    [int(s) if s is not None else None, int(e), str(f)]
+                    for s, e, f in raw_pairs
+                ]
+            except (TypeError, ValueError):
+                return jsonify(
+                    {"error": "pairs must be [season, episode, filename] triples"}
+                ), 400
+            if any(not p[2] for p in pairs):
+                return jsonify({"error": "pairs must name a local file"}), 400
+
+        if raw_episodes is not None and not selected and not pairs:
+            return jsonify(
+                {"error": "select at least one episode or movie"}
+            ), 400
 
         job = {
             "target_dir": os.path.expanduser(target_dir),
@@ -1884,6 +1934,7 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
             "cleanup": bool(data.get("cleanup", defaults["cleanup"])),
             "recursive": bool(data.get("recursive", False)),
             "episodes": selected,
+            "pairs": pairs,
         }
 
         username = None
@@ -1900,6 +1951,9 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
         slug = parts[-1]
         if slug.startswith("staffel-") and len(parts) >= 2:
             slug = f"{parts[-2]} {slug}"
+        # movie-site URLs: "12345-some-movie.html" -> "some-movie"
+        slug = re.sub(r"\.html?$", "", slug)
+        slug = re.sub(r"^\d+-", "", slug)
         slug = slug.replace("-", " ").title()
         queue_id = add_to_queue(
             f"DubSync: {slug}",
@@ -1967,6 +2021,8 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
         """Parse a local folder's video filenames into season/episode keys."""
         from ..models.aniworld_to.dubsync.matcher import scan_directory
 
+        from pathlib import Path
+
         raw = request.args.get("path", "").strip()
         if not raw:
             return jsonify({"error": "path is required"}), 400
@@ -1981,18 +2037,27 @@ def create_app(auth_enabled=False, sso_enabled=False, force_sso=False):
         except OSError as exc:
             return jsonify({"error": str(exc)}), 400
 
+        base = Path(path)
+
+        def _rel(p):
+            try:
+                return str(p.relative_to(base))
+            except ValueError:
+                return p.name
+
         return jsonify(
             {
                 "path": path,
                 "files": [
                     {
                         "name": pf.path.name,
+                        "rel": _rel(pf.path),
                         "season": pf.season,
                         "episode": pf.episode,
                     }
                     for pf in parsed
                 ],
-                "unparsed": [p.name for p in unmatched],
+                "unparsed": [{"name": p.name, "rel": _rel(p)} for p in unmatched],
             }
         )
 
